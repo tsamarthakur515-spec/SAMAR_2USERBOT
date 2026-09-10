@@ -1,6 +1,13 @@
 import logging
+import re
 from pyrogram import Client, filters
-from pyrogram.errors import SessionPasswordNeeded
+from pyrogram.errors import (
+    SessionPasswordNeeded,
+    PhoneNumberInvalid,
+    PhoneCodeInvalid,
+    PhoneCodeExpired,
+    FloodWait,
+)
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 from config import OWNER_ID, ALIVE_PIC, MONGO_URL
@@ -77,10 +84,9 @@ class Data:
 
 **1) Sᴇɴᴅ /add ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ **
 **2) Sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ɪɴ ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ (ᴇ.ɢ. +917800000000)**
-**3) ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴛᴇʟᴇɢʀᴀᴍ ᴀᴘᴘ ғᴏʀ OTP, ᴀɴᴅ sᴇɴᴅ ɪᴛ ʜᴇʀᴇ (sᴘᴀᴄᴇs ᴏᴘᴛɪᴏɴᴀʟ)**
+**3) Telegram app ᴘᴇ OTP ᴀᴀᴇɢᴀ (SMS ɴᴀʜɪ) — ᴜs ᴄᴏᴅᴇ ᴋᴏ ʏᴀʜᴀɴ ʙʜᴇᴊᴏ**
 
 **➤ ɪғ 2FA ᴏɴ, sᴇɴᴅ ᴛʜᴀᴛ ᴘᴀssᴡᴏʀᴅ ɴᴇxᴛ.**
-**➤ ʏᴏᴜʀ ʙᴏᴛ ᴡɪʟʟ ʙᴇ ʜᴏsᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ.**
 
 **sᴜᴘᴘᴏʀᴛ:** [𝐉𝐨𝐢𝐧]({SUPPORT_LINK})
 **ᴜᴘᴅᴀᴛᴇs:** [𝐂𝐡𝐚𝐧𝐧𝐞𝐥]({UPDATES_LINK})
@@ -185,7 +191,9 @@ async def restart_all_sessions():
 
 @app.on_message(filters.command("clone") & filters.private)
 async def clone(bot: app, msg: Message):
-    text = await msg.reply("❍ FIRST GEN SESSION\n\n𔓕 /clone session\n\n❍ OR - USE\n\n𔓕 /add ( ғᴏʀ ᴀᴜᴛᴏ-ʜᴏsᴛ )")
+    text = await msg.reply(
+        "❍ FIRST GEN SESSION\n\n𔓕 /clone session\n\n❍ OR - USE\n\n𔓕 /add ( ғᴏʀ ᴀᴜᴛᴏ-ʜᴏsᴛ )"
+    )
     if len(msg.command) < 2:
         return
     phone = msg.command[1]
@@ -211,7 +219,10 @@ async def clone(bot: app, msg: Message):
 async def add_session_command(client, message: Message):
     user_id = message.from_user.id
     await message.reply(
-        "📲 ᴘʟᴇᴀsᴇ sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ɪɴ ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ (e.g., +918200000009):"
+        "📲 ᴘʟᴇᴀsᴇ sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ\n"
+        "ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ:\n"
+        "`+97798xxxxxxxx` ʏᴀ `+9182xxxxxxxx`\n\n"
+        "⚠️ OTP **Telegram app** ᴘᴇ ᴀᴀᴛᴀ ʜᴀɪ (SMS ɴᴀʜɪ)."
     )
     user_sessions[user_id] = {"step": "awaiting_phone"}
 
@@ -235,6 +246,14 @@ async def remove_session(_, msg: Message):
         await msg.reply(f"⚠️ ᴇʀʀᴏʀ ʀᴇᴍᴏᴠɪɴɢ sᴇssɪᴏɴ:\n`{e}`")
 
 
+def _clean_phone(raw: str) -> str:
+    # keep + and digits only
+    phone = re.sub(r"[^\d+]", "", raw.strip())
+    if not phone.startswith("+"):
+        phone = "+" + phone.lstrip("0")
+    return phone
+
+
 @app.on_message(
     filters.private
     & filters.text
@@ -248,12 +267,16 @@ async def session_handler(_, msg: Message):
 
     step = session.get("step")
     if step == "awaiting_phone":
-        phone = msg.text.strip().replace(" ", "")
-        if not phone.startswith("+"):
-            await msg.reply("Number must start with + and country code. Example: +977...")
+        phone = _clean_phone(msg.text)
+        if len(phone) < 10:
+            await msg.reply("❌ Number galat. Example: `+97798xxxxxxxx`")
             return
+
         client = Client(
-            name=f"gen_{uid}", api_id=API_ID, api_hash=API_HASH, in_memory=True
+            name=f"gen_{uid}",
+            api_id=API_ID,
+            api_hash=API_HASH,
+            in_memory=True,
         )
         session.update({"phone": phone, "client": client})
         try:
@@ -261,13 +284,37 @@ async def session_handler(_, msg: Message):
             sent = await client.send_code(phone)
             session["phone_code_hash"] = sent.phone_code_hash
             session["step"] = "awaiting_otp"
+
+            code_type = getattr(sent, "type", None)
+            type_name = str(code_type).split(".")[-1] if code_type else "APP"
+
             await msg.reply(
-                "📨 OTP sᴇɴᴛ! ᴘʟᴇᴀsᴇ sᴇɴᴅ ɪɴ ᴛʜɪs ғᴏʀᴍᴀᴛ: `1 2 3 4 5` (sᴘᴀᴄᴇs ᴏᴘᴛɪᴏɴᴀʟ)"
+                f"✅ Code request OK (`{type_name}`)\n\n"
+                f"📱 Number: `{phone}`\n\n"
+                f"**OTP kahan dekho:**\n"
+                f"1) Usi number ka **Telegram app** open karo\n"
+                f"2) Notification / login code message\n"
+                f"3) Yahan bhejo: `12345` ya `1 2 3 4 5`\n\n"
+                f"SMS pe nahi aata — Telegram app pe aata hai."
             )
+        except FloodWait as e:
+            await msg.reply(
+                f"⏳ Flood wait: **{e.value}** seconds baad try /add"
+            )
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            user_sessions.pop(uid, None)
+        except PhoneNumberInvalid:
+            await msg.reply("❌ Invalid phone number. `+countrycode` ke saath bhejo.")
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            user_sessions.pop(uid, None)
         except Exception as e:
-            await msg.reply(
-                f"❌ ғᴀɪʟᴇᴅ:\n`{e}`\nᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ /add"
-            )
+            await msg.reply(f"❌ OTP send fail:\n`{e}`\n\n/add se dubara try karo.")
             try:
                 await client.disconnect()
             except Exception:
@@ -285,9 +332,28 @@ async def session_handler(_, msg: Message):
             )
         except SessionPasswordNeeded:
             session["step"] = "awaiting_2fa"
-            return await msg.reply("🔐 sᴇɴᴅ ʏᴏᴜʀ 2FA ᴘᴀssᴡᴏʀᴅ.")
+            return await msg.reply("🔐 2FA on hai. Cloud password bhejo.")
+        except PhoneCodeInvalid:
+            await msg.reply("❌ OTP galat. Sahi code bhejo ya /add se naya lo.")
+            return
+        except PhoneCodeExpired:
+            await msg.reply("❌ OTP expire. /add se naya code lo.")
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            user_sessions.pop(uid, None)
+            return
+        except FloodWait as e:
+            await msg.reply(f"⏳ Wait **{e.value}** sec, phir /add")
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            user_sessions.pop(uid, None)
+            return
         except Exception as e:
-            await msg.reply(f"❌ sɪɢɴ ɪɴ ғᴀɪʟᴇᴅ:\n`{e}`\n/add ᴀɢᴀɪɴ")
+            await msg.reply(f"❌ Sign-in fail:\n`{e}`\n/add again")
             try:
                 await client.disconnect()
             except Exception:
@@ -303,7 +369,7 @@ async def session_handler(_, msg: Message):
             await client.check_password(password)
             await finalize_login(client, msg, uid)
         except Exception as e:
-            await msg.reply(f"❌ ᴡʀᴏɴɢ ᴘᴀssᴡᴏʀᴅ:\n`{e}`\n/add ᴀɢᴀɪɴ")
+            await msg.reply(f"❌ Password galat:\n`{e}`\n/add again")
             try:
                 await client.disconnect()
             except Exception:
