@@ -16,6 +16,8 @@ sessions_col = db["UserSessions"]
 
 OWNER_USERNAME = "ll_Sexcy_James_ll"
 OWNER_LINK = f"https://t.me/{OWNER_USERNAME}"
+SUPPORT_LINK = "https://t.me/+qwlkJNntCU0yMjhl"
+UPDATES_LINK = "https://t.me/+kycml-zhzSs2Zjdl"
 
 class Data:
     donate_button = [InlineKeyboardButton("Donate", callback_data="donate")]
@@ -40,6 +42,10 @@ class Data:
             InlineKeyboardButton("How to use", callback_data="help"),
             InlineKeyboardButton("About", callback_data="about")
         ],
+        [
+            InlineKeyboardButton("Support", url=SUPPORT_LINK),
+            InlineKeyboardButton("Updates", url=UPDATES_LINK)
+        ],
         [InlineKeyboardButton("Developer", url=OWNER_LINK)],
     ]
 
@@ -51,6 +57,8 @@ I am a powerful ID-userbot.
 You can use me for fun features.
 
 By: [@{OWNER_USERNAME}]({OWNER_LINK})
+Support: [Join]({SUPPORT_LINK})
+Updates: [Channel]({UPDATES_LINK})
 """
 
     HELP = """
@@ -69,11 +77,13 @@ By: [@{OWNER_USERNAME}]({OWNER_LINK})
 1) Send /add to the bot
 2) Send your phone number in international format (e.g. +917800000000)
 3) Open Telegram app on that number → you will get login code (OTP)
-4) Send OTP here **without spaces** e.g. `12345` (or with spaces `1 2 3 4 5` — both work now)
+4) Send OTP here e.g. `12345` (spaces optional)
 
 If 2FA is on, send that password next.
 
-Support: [@{OWNER_USERNAME}]({OWNER_LINK})
+Owner: [@{OWNER_USERNAME}]({OWNER_LINK})
+Support: [GC]({SUPPORT_LINK})
+Updates: [Channel]({UPDATES_LINK})
 """
 
     ABOUT = f"""
@@ -84,12 +94,15 @@ Telegram userbot host panel.
 Language: Python
 Owner / Developer: [@{OWNER_USERNAME}]({OWNER_LINK})
 Owner ID: `{OWNER_ID}`
+Support: [GC]({SUPPORT_LINK})
+Updates: [Channel]({UPDATES_LINK})
 """
 
     DONATE = f"""
 Thanks for considering support.
 
 Contact owner: [@{OWNER_USERNAME}]({OWNER_LINK})
+Support GC: [Join]({SUPPORT_LINK})
 """
 
 
@@ -258,7 +271,6 @@ async def session_handler(_, msg: Message):
             user_sessions.pop(uid, None)
 
     elif step == "awaiting_otp":
-        # accept both "12345" and "1 2 3 4 5"
         otp = msg.text.strip().replace(" ", "")
         client = session["client"]
         try:
