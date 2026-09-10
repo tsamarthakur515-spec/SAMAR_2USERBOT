@@ -1,10 +1,29 @@
 from random import choice
 from pyrogram import filters, Client
 from pyrogram.types import Message
-# import 
-from Zaid import SUDO_USER 
-from cache.data import RAID, PBIRAID, OneWord, HIRAID, PORM, EMOJI, GROUP, VERIFIED_USERS
-from cache.data import *
+from Zaid import SUDO_USER
+
+try:
+    from cache.data import RAID, PBIRAID, OneWord, HIRAID, EMOJI, GROUP, VERIFIED_USERS
+except ImportError:
+    RAID = ["!"]
+    PBIRAID = ["!"]
+    OneWord = ["!"]
+    HIRAID = ["!"]
+    EMOJI = ["🔥"]
+    GROUP = []
+    VERIFIED_USERS = []
+
+try:
+    from cache.data import PORN as _PORN
+except ImportError:
+    _PORN = ["!"]
+try:
+    from cache.data import PORM as _PORM
+except ImportError:
+    _PORM = _PORN
+PORM = _PORM
+PORN = _PORN
 
 ACTIVATE_RLIST = []
 
@@ -17,10 +36,11 @@ async def rr(client: Client, message: Message):
     if reply:
         user = reply.from_user.id
     else:
-        user = message.text.split(None, 1)[1]
-        if not user:
+        parts = message.text.split(None, 1)
+        if len(parts) < 2:
             await r.edit("**Provide Me A USER_ID or reply to someone**")
             return
+        user = parts[1]
     user = await client.get_users(user)
     if int(message.chat.id) in GROUP:
         await r.edit("`You Cannot Spam In Developers' Chat`")
@@ -45,10 +65,11 @@ async def drr(client: Client, message: Message):
     if reply:
         user = reply.from_user.id
     else:
-        user = message.text.split(None, 1)[1]
-        if not user:
+        parts = message.text.split(None, 1)
+        if len(parts) < 2:
             await r.edit("Provide me username/userid or reply to user for deactivating replyraid")
             return
+        user = parts[1]
     user = await client.get_users(user)
     if int(user.id) not in ACTIVATE_RLIST:
         await r.edit("User Not in Replyraid.")
@@ -60,9 +81,7 @@ async def drr(client: Client, message: Message):
 @Client.on_message(filters.incoming)
 async def watch_raids(client: Client, message: Message):
     try:
-        if not message:
-            return
-        if not message.from_user:
+        if not message or not message.from_user:
             return
         user = message.from_user.id
         userr = message.from_user
@@ -74,15 +93,8 @@ async def watch_raids(client: Client, message: Message):
             return
         if int(message.chat.id) in GROUP:
             return
-        try:
-            if not message.from_user.id in ACTIVATE_RLIST:
-                return
-        except AttributeError:
+        if user not in ACTIVATE_RLIST:
             return
-        try:
-            if message.from_user.id in ACTIVATE_RLIST:
-                await message.reply_text(raid)
-        except Exception as a:
-            print(f"An error occurred (a): {str(a)}")
+        await message.reply_text(raid)
     except Exception as b:
         print(f"An error occurred (b): {str(b)}")
