@@ -9,23 +9,27 @@ from Zaid import START_TIME
 from Zaid import SUDO_USER
 from Zaid.helper.PyroHelpers import ReplyCheck
 from Zaid.modules.help import add_command_help
-from Zaid.modules.bot.inline import get_readable_time
 
 alive_logo = ALIVE_PIC or "https://files.catbox.moe/r58nec.jpg"
 
+OWNER_LINK = "https://t.me/ll_Sexcy_James_ll"
+SUPPORT_LINK = "https://t.me/+qwlkJNntCU0yMjhl"
+UPDATES_LINK = "https://t.me/+kycml-zhzSs2Zjdl"
+
 if ALIVE_TEXT:
-   txt = ALIVE_TEXT
+    txt = ALIVE_TEXT
 else:
     txt = (
-        f"** 𝐒𝐓𝐑𝐀𝐍𝐆𝐄𝐑 ✘ 𝐔𝐒𝐄𝐑𝐁𝐎𝐓 **\n\n"
+        f"** 𝐉𝐀𝐌𝐄𝐒 ✘ 𝐔𝐒𝐄𝐑𝐁𝐎𝐓 **\n\n"
         f"❏ **𝐕ᴇʀsɪᴏɴ**: `2.1`\n"
         f"├• **𝐔ᴘᴛɪᴍᴇ**: `{str(datetime.now() - START_TIME).split('.')[0]}`\n"
         f"├• **𝐏ʏᴛʜᴏɴ**: `{python_version()}`\n"
         f"├• **𝐏ʏʀᴏɢʀᴀᴍ**: `{__version__}`\n"
-        f"├• **𝐒ᴜᴘᴘᴏʀᴛ**: [Click](https://t.me/MASTIWITHFRIENDSXD)\n"
-        f"├• **𝐔ᴘᴅᴀᴛᴇ**: [Click](https://t.me/StrangerAssociation)\n"
-        f"└• **𝐇ᴏᴛᴇʀ**: [Click](https://t.me/StrangerUBbot)"        
+        f"├• **𝐒ᴜᴘᴘᴏʀᴛ**: [Click]({SUPPORT_LINK})\n"
+        f"├• **𝐔ᴘᴅᴀᴛᴇ**: [Click]({UPDATES_LINK})\n"
+        f"└• **𝐎ᴡɴᴇʀ**: [Click]({OWNER_LINK})"
     )
+
 
 @Client.on_message(
     filters.command(["alive", "shivop"], ".") & (filters.me | filters.user(SUDO_USER))
@@ -33,11 +37,11 @@ else:
 async def alive(client: Client, message: Message):
     xx = await message.reply_text("⚡️")
     try:
-       await message.delete()
-    except:
-       pass
+        await message.delete()
+    except Exception:
+        pass
     send = client.send_video if alive_logo.endswith(".mp4") else client.send_photo
-    xd = (f"{txt}")
+    xd = f"{txt}"
     try:
         await asyncio.gather(
             xx.delete(),
@@ -51,18 +55,24 @@ async def alive(client: Client, message: Message):
     except BaseException:
         await xx.edit(xd, disable_web_page_preview=True)
 
+
 @Client.on_message(filters.command("repo", ".") & filters.me)
 async def repo(bot: Client, message: Message):
     await message.edit("⚡")
     await asyncio.sleep(1)
     await message.edit("Fetching Source Code.....")
     await asyncio.sleep(1)
-    await message.edit("Ⰶ ʜᴇʀᴇ ɪs ғʀᴇᴇ sᴛʀᴀɴɢᴇʀ ᴜsᴇʀʙᴏᴛ ʜᴏsᴛᴇʀ: \n\n[𝐒𝐓𝐑𝐀𝐍𝐆𝐄𝐑 𝐔𝐒𝐄𝐑𝐁𝐎𝐓](https://t.me/StrangerUBbot)\n\nⰆ ᴄʟᴏɴᴇ ʏᴏᴜʀ ᴘʏʀᴏɢʀᴀᴍ sᴇssɪᴏɴ & ᴇɴᴊᴏʏ")
+    await message.edit(
+        f"Ⰶ 𝐉𝐀𝐌𝐄𝐒 ✘ 𝐔𝐒𝐄𝐑𝐁𝐎𝐓\n\n"
+        f"Owner: [@{OWNER_LINK.split('/')[-1]}]({OWNER_LINK})\n"
+        f"Support: [Join]({SUPPORT_LINK})\n"
+        f"Updates: [Channel]({UPDATES_LINK})"
+    )
 
 
 @Client.on_message(filters.command("creator", ".") & filters.me)
 async def creator(bot: Client, message: Message):
-    await message.edit("@SHIVANSHDEVS")
+    await message.edit("@ll_Sexcy_James_ll")
 
 
 @Client.on_message(filters.command(["uptime", "up"], ".") & filters.me)
@@ -93,7 +103,7 @@ async def get_id(bot: Client, message: Message):
             file_id += "**ғɪʟᴇ ᴛʏᴘᴇ**: `photo`"
 
         elif rep.sticker:
-            file_id = f"**sɪᴄᴋᴇʀ ɪᴅ**: `{rep.sticker.file_id}`\n"
+            file_id = f"**sᴛɪᴄᴋᴇʀ ɪᴅ**: `{rep.sticker.file_id}`\n"
             if rep.sticker.set_name and rep.sticker.emoji:
                 file_id += f"**sᴛɪᴄᴋᴇʀ sᴇᴛ**: `{rep.sticker.set_name}`\n"
                 file_id += f"**sᴛɪᴄᴋᴇʀ ᴇᴍᴏᴊɪ**: `{rep.sticker.emoji}`\n"
@@ -161,8 +171,6 @@ async def get_id(bot: Client, message: Message):
         await message.edit(f"**Chat ID**: `{message.chat.id}`")
 
 
-
-
 add_command_help(
     "start",
     [
@@ -177,6 +185,6 @@ add_command_help(
 add_command_help(
     "restart",
     [
-        [".restart", "You are retarded if you do not know what this does."],
+        [".restart", "Restart the userbot."],
     ],
 )
