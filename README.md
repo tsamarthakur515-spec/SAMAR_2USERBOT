@@ -2,14 +2,15 @@
 
 <p align="center">A powerful ID userbot</p>
 
-<p align="center">
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Made%20with-Python-black.svg?style=flat-square&logo=python&logoColor=blue&color=red" /></a>
-</p>
-
 ## Owner
 
 - Telegram: [@ll_Sexcy_James_ll](https://t.me/ll_Sexcy_James_ll)
 - ID: `8841848847`
+
+## Links
+
+- Support GC: https://t.me/+qwlkJNntCU0yMjhl
+- Updates: https://t.me/+kycml-zhzSs2Zjdl
 
 ## Requirements
 
@@ -39,7 +40,7 @@ python3 -m Zaid
 
 ## Disclaimer
 
-Use at your own risk. Misuse can get Telegram accounts banned. Owner is not responsible for abuse.
+Use at your own risk. Misuse can get Telegram accounts banned.
 
 ## Credits
 
