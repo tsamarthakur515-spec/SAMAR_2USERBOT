@@ -85,6 +85,7 @@ class Data:
 **1) Sᴇɴᴅ /add ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴛʜᴇ ʙᴏᴛ **
 **2) Sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ɪɴ ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ (ᴇ.ɢ. +917800000000)**
 **3) Telegram app ᴘᴇ OTP ᴀᴀᴇɢᴀ (SMS ɴᴀʜɪ) — ᴜs ᴄᴏᴅᴇ ᴋᴏ ʏᴀʜᴀɴ ʙʜᴇᴊᴏ**
+**4) OTP ɴᴀ ᴀᴀʏᴇ ᴛᴏ `resend` ʟɪᴋʜᴏ**
 
 **➤ ɪғ 2FA ᴏɴ, sᴇɴᴅ ᴛʜᴀᴛ ᴘᴀssᴡᴏʀᴅ ɴᴇxᴛ.**
 
@@ -222,7 +223,8 @@ async def add_session_command(client, message: Message):
         "📲 ᴘʟᴇᴀsᴇ sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ\n"
         "ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ:\n"
         "`+97798xxxxxxxx` ʏᴀ `+9182xxxxxxxx`\n\n"
-        "⚠️ OTP **Telegram app** ᴘᴇ ᴀᴀᴛᴀ ʜᴀɪ (SMS ɴᴀʜɪ)."
+        "⚠️ OTP **Telegram app** ᴘᴇ ᴀᴀᴛᴀ ʜᴀɪ (SMS ɴᴀʜɪ).\n"
+        "OTP ɴᴀ ᴀᴀʏᴇ ᴛᴏ `resend` ʟɪᴋʜɴᴀ."
     )
     user_sessions[user_id] = {"step": "awaiting_phone"}
 
@@ -247,11 +249,15 @@ async def remove_session(_, msg: Message):
 
 
 def _clean_phone(raw: str) -> str:
-    # keep + and digits only
     phone = re.sub(r"[^\d+]", "", raw.strip())
     if not phone.startswith("+"):
         phone = "+" + phone.lstrip("0")
     return phone
+
+
+async def _send_login_code(client: Client, phone: str):
+    sent = await client.send_code(phone)
+    return sent
 
 
 @app.on_message(
@@ -281,7 +287,7 @@ async def session_handler(_, msg: Message):
         session.update({"phone": phone, "client": client})
         try:
             await client.connect()
-            sent = await client.send_code(phone)
+            sent = await _send_login_code(client, phone)
             session["phone_code_hash"] = sent.phone_code_hash
             session["step"] = "awaiting_otp"
 
@@ -291,11 +297,14 @@ async def session_handler(_, msg: Message):
             await msg.reply(
                 f"✅ Code request OK (`{type_name}`)\n\n"
                 f"📱 Number: `{phone}`\n\n"
-                f"**OTP kahan dekho:**\n"
-                f"1) Usi number ka **Telegram app** open karo\n"
-                f"2) Notification / login code message\n"
-                f"3) Yahan bhejo: `12345` ya `1 2 3 4 5`\n\n"
-                f"SMS pe nahi aata — Telegram app pe aata hai."
+                f"**OTP kahan milta hai (APP type):**\n"
+                f"1) **Usi number** se login wala Telegram open karo\n"
+                f"2) Chats me **Telegram** official account kholo\n"
+                f"   (blue verified badge wala)\n"
+                f"3) Wahan message hoga: `Login code: XXXXX`\n"
+                f"4) Code yahan bhejo: `12345`\n\n"
+                f"❌ SMS / call pe nahi aata jab type APP ho.\n\n"
+                f"OTP nahi dikha? Yahan **`resend`** likho."
             )
         except FloodWait as e:
             await msg.reply(
@@ -322,7 +331,45 @@ async def session_handler(_, msg: Message):
             user_sessions.pop(uid, None)
 
     elif step == "awaiting_otp":
-        otp = msg.text.strip().replace(" ", "")
+        text = msg.text.strip()
+        low = text.lower()
+
+        # resend OTP
+        if low in ("resend", "/resend", "again", "sms", "otp"):
+            client = session["client"]
+            try:
+                sent = await client.resend_code(
+                    phone_number=session["phone"],
+                    phone_code_hash=session["phone_code_hash"],
+                )
+                session["phone_code_hash"] = sent.phone_code_hash
+                code_type = getattr(sent, "type", None)
+                type_name = str(code_type).split(".")[-1] if code_type else "?"
+                await msg.reply(
+                    f"🔄 Resend OK (`{type_name}`)\n\n"
+                    f"Phir se check karo:\n"
+                    f"• Telegram official chat (APP)\n"
+                    f"• SMS / call agar type change hua\n\n"
+                    f"Code aaye to yahan bhejo."
+                )
+            except FloodWait as e:
+                await msg.reply(f"⏳ Resend wait: **{e.value}** sec")
+            except Exception as e:
+                await msg.reply(
+                    f"❌ Resend fail: `{e}`\n\n"
+                    f"/add se naya try karo (2–5 min baad)."
+                )
+            return
+
+        otp = text.replace(" ", "")
+        if not otp.isdigit() or len(otp) < 4:
+            await msg.reply(
+                "❌ Galat format.\n"
+                "OTP bhejo jaise `12345`\n"
+                "Ya naya code ke liye `resend` likho."
+            )
+            return
+
         client = session["client"]
         try:
             await client.sign_in(
@@ -334,7 +381,9 @@ async def session_handler(_, msg: Message):
             session["step"] = "awaiting_2fa"
             return await msg.reply("🔐 2FA on hai. Cloud password bhejo.")
         except PhoneCodeInvalid:
-            await msg.reply("❌ OTP galat. Sahi code bhejo ya /add se naya lo.")
+            await msg.reply(
+                "❌ OTP galat.\nSahi code bhejo, ya `resend` / `/add` se naya lo."
+            )
             return
         except PhoneCodeExpired:
             await msg.reply("❌ OTP expire. /add se naya code lo.")
